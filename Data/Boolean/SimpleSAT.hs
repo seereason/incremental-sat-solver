@@ -1,4 +1,4 @@
-module Data.Boolean.SimpleSAT where
+module Data.Boolean.SimpleSAT(Prop, (.&&.), (.||.)) where
 
 import Data.Boolean.Proposition
 import Data.Boolean.DPLL
@@ -11,13 +11,18 @@ data Term
   | AND Term Term
   | OR Term Term
 
+-- |
+-- Propositions represented as Boolean formulas. (Hopefully) more efficient than
+-- transforming everything to Conjunctive Normal Form.
+-- 
+-- /WARNING: The Boolean operator/ @:==:@ /is not supported yet./
 data Prop = Y | N
           | V !Int !Int !Int Term
 
 infixr 2  .||.
 infixr 3  .&&.
-(.&&.), (.||.) :: Prop -> Prop -> Prop
 
+(.&&.) :: Prop -> Prop -> Prop
 Y .&&. b  = b
 N .&&. _  = N
 a .&&. Y  = a
@@ -26,6 +31,7 @@ V ca da va ba .&&. V cb db vb bb
      | ca <= cb  = V ca (da+db) va (AND ba bb)
      | otherwise = V cb (da+db) vb (AND bb ba)
 
+(.||.) :: Prop -> Prop -> Prop
 Y  .||. _  = Y
 N  .||. b  = b
 _  .||. Y  = Y
@@ -64,15 +70,15 @@ instance Solvable Prop where
     nextLiteral (V c _ v _) = (c, v)
     nextLiteral _ = (0, 0)
 
-    specWith _ Y = Y
-    specWith _ N = N
-    specWith v (V _ _ _ x) = freeze x
-        where  freeze a@(VAR v')
+    freeze _ Y = Y
+    freeze _ N = N
+    freeze v (V _ _ _ x) = f x
+        where  f a@(VAR v')
                    | v == v'  = Y
                    | -v == v' = N
                    | otherwise = V 1 1 v' a
-               freeze (AND a b) = freeze a .&&. freeze b
-               freeze (OR a b)  = freeze a .||. freeze b   
+               f (AND a b) = f a .&&. f b
+               f (OR a b)  = f a .||. f b   
 
     isSatisfied Y = Just True
     isSatisfied N = Just False

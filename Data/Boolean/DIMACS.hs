@@ -1,7 +1,8 @@
 module Data.Boolean.DIMACS(fromDIMACS) where
 
 
-
+-- |
+-- Parse a DIMACS file. /Quick and dirty: Will probably crash on wrong input./
 fromDIMACS :: String -> [[Int]]
 fromDIMACS s = clauses
     where ls          = map words $ filter noComment $ lines s

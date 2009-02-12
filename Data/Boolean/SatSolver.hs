@@ -19,82 +19,75 @@
 -- 
 module Data.Boolean.SatSolver (
 
-  Boolean(..), SatSolver,
+  Proposition(..), SatSolver,
 
   newSatSolver, isSolved, 
 
-  lookupVar, assertTrue, branchOnVar, selectBranchVar, solve, isSolvable
+  lookupVar, assertTrue, branchOnVar, selectBranchVar, solve, isSolvable, branch
 
   ) where
 
-import Data.List
-import Data.Boolean
-
-import Control.Monad.Writer
+import Data.Boolean.DPLL
+import Data.Boolean.Proposition
 
 import qualified Data.IntMap as IM
-
--- | A @SatSolver@ can be used to solve boolean formulas.
--- 
-data SatSolver = SatSolver { clauses :: CNF, bindings :: IM.IntMap Bool }
- deriving Show
+import Control.Monad(MonadPlus, mplus)
 
 -- | A new SAT solver without stored constraints.
 -- 
-newSatSolver :: SatSolver
-newSatSolver = SatSolver [] IM.empty
+newSatSolver :: Solvable a => SatSolver a
+newSatSolver = SatSolver IM.empty (fromProposition Yes)
 
 -- | This predicate tells whether all constraints are solved.
 -- 
-isSolved :: SatSolver -> Bool
-isSolved = null . clauses
+isSolved :: Solvable a => SatSolver a -> Bool
+isSolved a = isSatisfied (formula a) == Just True
 
--- |
--- We can lookup the binding of a variable according to the currently
--- stored constraints. If the variable is unbound, the result is
--- @Nothing@.
--- 
-lookupVar :: Int -> SatSolver -> Maybe Bool
-lookupVar name = IM.lookup name . bindings
 
 -- | 
 -- We can assert boolean formulas to update a @SatSolver@. The
 -- assertion may fail if the resulting constraints are unsatisfiable.
 -- 
-assertTrue :: MonadPlus m => Boolean -> SatSolver -> m SatSolver
-assertTrue formula solver = do
-  newClauses <- foldl (addClause (bindings solver))
-                      (return (clauses solver))
-                      (booleanToCNF formula)
-  simplify (solver { clauses = newClauses })
+assertTrue :: (MonadPlus m, Solvable a) => Proposition -> SatSolver a -> m (SatSolver a)
+assertTrue f s
+    | failed     = fail "impossible"
+    | otherwise  = return s'
+    where  failed = isSatisfied (formula s) == Just False
+           s' = addConstraint f s
 
 -- |
 -- This function guesses a value for the given variable, if it is
 -- currently unbound. As this is a non-deterministic operation, the
 -- resulting solvers are returned in an instance of @MonadPlus@.
 -- 
-branchOnVar :: MonadPlus m => Int -> SatSolver -> m SatSolver
-branchOnVar name solver =
-  maybe (branchOnUnbound name solver)
-        (const (return solver))
-        (lookupVar name solver)
+branchOnVar ::  (MonadPlus m, Solvable a) => Int -> SatSolver a -> m (SatSolver a)
+branchOnVar v s 
+    | IM.member v (valuation s)
+        = return s
+    | otherwise
+        = simplify2 v s
+
 
 -- |
 -- We select a variable from the shortest clause hoping to produce a
 -- unit clause.
 --
-selectBranchVar :: SatSolver -> Int
-selectBranchVar = literalVar . head . head . sortBy shorter . clauses
+selectBranchVar :: Solvable a => SatSolver a -> Maybe Int
+selectBranchVar s = case nextLiteral (formula s) of
+                      (0,0) -> Nothing
+                      (_,v) -> Just v
 
 -- | 
 -- This function guesses values for variables such that the stored
 -- constraints are satisfied. The result may be non-deterministic and
 -- is, hence, returned in an instance of @MonadPlus@.
 -- 
-solve :: MonadPlus m => SatSolver -> m SatSolver
-solve solver
-  | isSolved solver = return solver
-  | otherwise = branchOnUnbound (selectBranchVar solver) solver >>= solve
+solve :: (MonadPlus m, Solvable a) => SatSolver a -> m (IM.IntMap Bool)
+solve s = case isSatisfied (formula s) of
+            Just True  -> return (valuation s)
+            Just False  -> fail "no solution"
+            Nothing    -> branch s >>= solve
+
 
 -- |
 -- This predicate tells whether the stored constraints are
@@ -102,75 +95,37 @@ solve solver
 -- tries to find a solution using backtracking and returns @True@ if
 -- and only if that fails.
 -- 
-isSolvable :: SatSolver -> Bool
+isSolvable :: Solvable a => SatSolver a -> Bool
 isSolvable = not . null . solve
 
 
--- private helper functions
+-- |
+-- This function guesses a value for the next variable.
+-- As this is a non-deterministic operation, the
+-- resulting solvers are returned in an instance of @MonadPlus@.
+-- 
+branch ::  (MonadPlus m, Solvable a) => SatSolver a -> m (SatSolver a)
+branch s
+    | c == 0     = return s
+    | c == 1     = simplify v s
+    | otherwise  = simplify2 v s
+    where (c,v) = nextLiteral (formula s)
 
-addClause :: MonadPlus m => IM.IntMap Bool -> m [Clause] -> Clause -> m [Clause]
-addClause binds mclauses newClause = do
-  oldClauses <- mclauses
-  let unboundLits = foldl (addUnbound binds) (Just []) newClause
-  maybe (return oldClauses)
-        (\lits -> guard (not (null lits)) >> return (lits:oldClauses))
-        unboundLits
 
-addUnbound :: IM.IntMap Bool -> Maybe Clause -> Literal -> Maybe Clause
-addUnbound binds mlits lit = do
-  lits <- mlits
-  maybe (Just (lit:lits))
-        (\b -> guard (b /= isPositiveLiteral lit) >> return lits)
-        (IM.lookup (literalVar lit) binds)
+simplify :: (MonadPlus m, Solvable a) => Int -> SatSolver a -> m (SatSolver a)
+simplify v' = return . freezeVar v'
 
-updateSolver :: MonadPlus m => CNF -> [(Int,Bool)] -> SatSolver -> m SatSolver
-updateSolver cs bs solver = do
-  bs' <- foldr (uncurry insertBinding) (return (bindings solver)) bs
-  return $ solver { clauses = cs, bindings = bs' }
+simplify2 :: (MonadPlus m, Solvable a) => Int -> SatSolver a -> m (SatSolver a)
+simplify2 v s =  let guess1 = simplify v s
+                     guess2 = simplify (-v) s
+                 in guess1 `mplus` guess2
 
-insertBinding :: MonadPlus m
-              => Int -> Bool -> m (IM.IntMap Bool) -> m (IM.IntMap Bool)
-insertBinding name newValue binds = do
-  bs <- binds
-  maybe (return (IM.insert name newValue bs))
-        (\oldValue -> do guard (oldValue==newValue); return bs)
-        (IM.lookup name bs)
 
-simplify :: MonadPlus m => SatSolver -> m SatSolver
-simplify solver = do
-  (cs,bs) <- runWriterT . simplifyClauses . clauses $ solver
-  updateSolver cs bs solver
 
-simplifyClauses :: MonadPlus m => CNF -> WriterT [(Int,Bool)] m CNF
-simplifyClauses [] = return []
-simplifyClauses allClauses = do
-  let shortestClause = head . sortBy shorter $ allClauses
-  guard (not (null shortestClause))
-  if null (tail shortestClause)
-   then propagate (head shortestClause) allClauses >>= simplifyClauses
-   else return allClauses
-
-propagate :: MonadPlus m => Literal -> CNF -> WriterT [(Int,Bool)] m CNF
-propagate literal allClauses = do
-  tell [(literalVar literal, isPositiveLiteral literal)]
-  return (foldr prop [] allClauses)
- where
-  prop c cs | literal `elem` c = cs
-            | otherwise        = filter (invLiteral literal/=) c : cs
-
-branchOnUnbound :: MonadPlus m => Int -> SatSolver -> m SatSolver
-branchOnUnbound name solver =
-  guess (Pos name) solver `mplus` guess (Neg name) solver
-
-guess :: MonadPlus m => Literal -> SatSolver -> m SatSolver
-guess literal solver = do
-  (cs,bs) <- runWriterT (propagate literal (clauses solver) >>= simplifyClauses)
-  updateSolver cs bs solver
-
-shorter :: [a] -> [a] -> Ordering
-shorter []     []     = EQ
-shorter []     _      = LT
-shorter _      []     = GT
-shorter (_:xs) (_:ys) = shorter xs ys
-
+freezeVar :: Solvable a => Int -> SatSolver a -> SatSolver a
+freezeVar n (SatSolver val x)
+    | n >= 0     = s' n True
+    | otherwise  = s' (-n) False
+    where s' v b = SatSolver { valuation = IM.insert v b val,
+                               formula  = freeze n x }
 

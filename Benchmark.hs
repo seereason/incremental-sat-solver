@@ -7,6 +7,7 @@ import System.FilePath
 
 
 import Data.Boolean.DIMACS
+import Data.Boolean.SatSolver
 import Data.Boolean.DPLL
 import Data.Boolean.SimpleSAT
 
@@ -33,18 +34,20 @@ solveFile f = do  b <- fmap fromDIMACS (readFile f)
                   let  p :: Prop
                        p = fromCNF b
                        e = (solve . newSolver ) p
-                  print (stat b)
+                  -- print (stat b)
                   putStrLn $ f ++ " solved: " ++ show (not $ null e)
 
 
-
-stat :: [[Int]] -> [(Int, (Int, Int, Int))]
-stat b = sortBy (comparing val) $ map trans l
+-- |
+-- Count positive and negative uses of every literal.
+-- Returns sums of clause sizes for positve and negative uses.
+-- 
+stat :: [[Int]] -> [(Int, (Int, Int))]
+stat b = sortBy (comparing val) l
     where l = M.toList . foldl' ins M.empty . concat $ map l' b
           l' c = map (\v -> (length c, v)) c
           ins m (l,i) = M.insertWith add2 (abs i) (one l i) m
           add2 (a,b)(c,d) = (a+c,b+d)
           one l i | i> 0      = (l,0)
                   | otherwise = (0,l)
-          trans (v,(p,n)) = (v,(p, n, (p*n)))
-          val (_, (_,_,l)) = l
+          val (_, (p,n)) = - p*n

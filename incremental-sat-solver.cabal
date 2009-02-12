@@ -1,5 +1,5 @@
 Name:          incremental-sat-solver
-Version:       0.1.7
+Version:       0.2.0
 Cabal-Version: >= 1.6
 Synopsis:      Simple, Incremental SAT Solving as a Library
 Description:   This Haskell library provides an implementation of the
@@ -23,7 +23,8 @@ Extra-Source-Files: README, Benchmark.hs, Funsat.hs
 
 Library
   Build-Depends:    base, containers, mtl
-  Exposed-Modules:  Data.Boolean.Proposition, Data.Boolean.DPLL, Data.Boolean.DIMACS, Data.Boolean.SimpleSAT
+  Exposed-Modules:  Data.Boolean.Proposition, Data.Boolean.SatSolver, Data.Boolean.DIMACS, Data.Boolean.SimpleSAT, Data.Boolean.DPLL
+
   Other-Modules:    
   Ghc-Options:      -Wall -funbox-strict-fields -O2
 
