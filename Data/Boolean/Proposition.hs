@@ -9,11 +9,7 @@
 -- Portability : portable
 -- 
 -- This library provides a representation of boolean formulas that is
--- used by the solver in "Data.Boolean.DPLL".
--- 
--- We also define a function to simplify formulas, a type for
--- conjunctive normalforms, and a function that creates them from
--- boolean formulas.
+-- used by the solver in "Data.Boolean.SatSolver".
 -- 
 module Data.Boolean.Proposition ( 
     Proposition(..),

@@ -1,9 +1,26 @@
-module Data.Boolean.SimpleSAT(Prop, (.&&.), (.||.)) where
+-- |
+-- Module      : Data.Boolean.SimpleSAT
+-- Copyright   : Holger Siegel
+-- License     : BSD3
+-- 
+-- Propositions represented as Boolean formulas. (Hopefully) more efficient than
+-- transforming everything to Conjunctive Normal Form.
+-- 
+-- /WARNING: The Boolean operator/ @:==:@ /is not supported yet./
+--
+module Data.Boolean.SimpleSAT
+    (  SimpleProp
+    ) where
+ 
+
 
 import Data.Boolean.Proposition
+import Data.Boolean.Dimacs(clauses)
 import Data.Boolean.DPLL
 
 
+infixr 2  .||.
+infixr 3  .&&.
 
 
 data Term
@@ -11,18 +28,14 @@ data Term
   | AND Term Term
   | OR Term Term
 
--- |
--- Propositions represented as Boolean formulas. (Hopefully) more efficient than
--- transforming everything to Conjunctive Normal Form.
--- 
--- /WARNING: The Boolean operator/ @:==:@ /is not supported yet./
-data Prop = Y | N
-          | V !Int !Int !Int Term
 
-infixr 2  .||.
-infixr 3  .&&.
+data SimpleProp 
+    = Y | N
+    | V !Int !Int !Int Term
 
-(.&&.) :: Prop -> Prop -> Prop
+
+{-# INLINE (.&&.) #-}
+(.&&.) :: SimpleProp -> SimpleProp -> SimpleProp
 Y .&&. b  = b
 N .&&. _  = N
 a .&&. Y  = a
@@ -31,7 +44,8 @@ V ca da va ba .&&. V cb db vb bb
      | ca <= cb  = V ca (da+db) va (AND ba bb)
      | otherwise = V cb (da+db) vb (AND bb ba)
 
-(.||.) :: Prop -> Prop -> Prop
+{-# INLINE (.||.) #-}
+(.||.) :: SimpleProp -> SimpleProp -> SimpleProp
 Y  .||. _  = Y
 N  .||. b  = b
 _  .||. Y  = Y
@@ -41,34 +55,32 @@ V ca da va ba .||. V cb db vb bb
   | otherwise = V (ca+cb) db vb (OR bb ba)
 
 
-
-instance Solvable Prop where
-
+instance Solvable SimpleProp where
     fromProposition = pos
         where
-          neg (Var n)    = let a = -n
-                           in V 1 1 a (VAR a)
+          neg (Var v)    = let n = -v
+                           in V 1 1 n (VAR n)
           neg Yes        = N
           neg No         = Y
           neg (Not x)    = pos x
           neg (x :&&: y) = neg x .||. neg y
           neg (x :||: y) = neg x .&&. neg y
       
-          pos (Var n)    = V 1 1 n (VAR n)
+          pos (Var v)    = V 1 1 v (VAR v)
           pos Yes        = Y
           pos No         = N
           pos (Not x)    = neg x
           pos (x :&&: y) = pos x .&&. pos y
           pos (x :||: y) = pos x .||. pos y
 
-    fromCNF []   = Y
-    fromCNF xs   = foldr (\ c b -> fromClause c .&&. b) Y xs
-        where fromClause = foldr (\ v b -> V 1 1 v (VAR v) .||. b) N
-    
+    fromDimacs xs = foldr addClause Y (clauses xs)
+        where addClause c b  = foldr addVar N c .&&. b
+              addVar v b     = V 1 1 v (VAR v) .||. b
+
     conjunction = (.&&.)
 
-    nextLiteral (V c _ v _) = (c, v)
-    nextLiteral _ = (0, 0)
+    nextLiteral (V c _ v _)  = (c, v)
+    nextLiteral _            = (0, 0)
 
     freeze _ Y = Y
     freeze _ N = N
@@ -80,8 +92,6 @@ instance Solvable Prop where
                f (AND a b) = f a .&&. f b
                f (OR a b)  = f a .||. f b   
 
-    isSatisfied Y = Just True
-    isSatisfied N = Just False
-    isSatisfied _ = Nothing
-
-
+    isSatisfied Y = return True
+    isSatisfied N = fail "no solution"
+    isSatisfied _ = return False

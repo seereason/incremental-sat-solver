@@ -1,3 +1,14 @@
+-- |
+-- Module      : Main
+-- Copyright   : Holger Siegel
+-- License     : BSD3
+-- 
+-- Simple Benchmark for testing SAT problems in DIMACS format.
+-- 
+-- see http://www.cs.ubc.ca/~hoos/SATLIB/benchm.htm
+--
+-- It uses the funsat library written by Denis Bueno. 
+
 module Main where
 
 

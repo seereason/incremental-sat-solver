@@ -5,86 +5,41 @@
 -- 
 module Data.Boolean.DPLL (
 
-  Solvable, fromProposition, fromCNF, conjunction, nextLiteral, freeze,
-
-  SatSolver(..),
-
-  newSolver,
+  Solvable, fromProposition, fromDimacs, conjunction, nextLiteral, freeze,
   isSatisfied, 
-
-  lookupVar,
-  addConstraint
   ) where
 
-import qualified Data.IntMap as IM
-
-
-import Data.Boolean.Proposition
+import Data.Boolean.Proposition(Proposition)
+import Data.Boolean.Dimacs(Dimacs)
 
 
 class Solvable a where
     fromProposition  :: Proposition -> a
-    fromCNF          :: [[Int]] -> a
+    fromDimacs       :: Dimacs -> a
     conjunction      :: a -> a -> a
 
     -- |
-    -- Finds the smallest clause and returns its size together with a 
-    -- literal that occurs in this clause. Returns @(0,0)@ if there
-    -- is no clause to be satisfied.
+    -- Finds the next literal to be specialized.
+    -- If the result is positve, then the non-negated literal
+    -- will be tried with higher priority by the solver.
+    -- Otherwise the negated literal will be preferred.
+    -- 
+    -- The first component of the result is the number of times
+    -- the literal occurs in the current clause. The second component
+    -- is the varibale index of the literal.
+    --
+    -- Returns @(0, 0)@ if there is no clause to be satisfied.
     nextLiteral  :: a -> (Int, Int)
 
-
+    -- |
+    -- @freeze n b@ returns a copy of @b@ in which every literal with index 
+    -- @n@ is set to @True@ and every literal with index @(-n)@ is set to @False@.
     freeze     :: Int -> a -> a
 
     -- | 
-    -- This predicate tells whether the @SatSolver@ has found a solution.
-    -- Returns @Just True@ if all constraints are solved, and @Just False@
-    -- if the given formula is not satisfyable. Returns @Nothing@ if the
-    -- formula is still unsolved.
-    isSatisfied  :: a -> Maybe Bool
-
-
--- | 
--- A @SatSolver@ can be used to solve boolean formulas.
--- It contains the Boolean formula to be solved and
--- and a valuation that assigns logical values to literals.
-data SatSolver a = SatSolver {
-      -- | Returns the @SatSolver@'s current valuation as a mapping from
-      --   variable indices to Boolean values
-      valuation   :: IM.IntMap Bool, 
-      formula :: a }
-               
-
--- |
--- Returns a new @SatSolver@ that contains the
--- given formula together with the empty valuation
---
-newSolver :: Solvable a => a -> SatSolver a
-newSolver = SatSolver IM.empty
-
-
-
-
--- |
--- We can lookup the binding of a variable according to the currently
--- stored constraints. If the variable is unbound, the result is
--- @Nothing@.
--- 
-lookupVar :: Int -> SatSolver a -> Maybe Bool
-lookupVar name = IM.lookup name . valuation
-
-
--- | 
--- We can assert boolean formulas to update a @SatSolver@. The
--- assertion may fail if the resulting constraints are unsatisfiable.
--- 
-addConstraint :: Solvable a => Proposition -> SatSolver a -> SatSolver a
-addConstraint b s = s { formula = conjunction expr constraint }
-    where expr = formula s
-          constraint = fromProposition (specialize lv b)
-          lv n = fmap fromBool $ lookupVar n s
-          fromBool True   = Yes
-          fromBool False  = No
-
-
+    -- This monadic action checks whether the @SatSolver@ has found a solution.
+    -- If all constraints are solved, then it returns @True@.
+    -- If there are unsolved constraints, then it returns @False@.
+    -- It @fail@s when the given constraints are known to be unsatisfiable.
+    isSatisfied  :: Monad m => a -> m Bool
 

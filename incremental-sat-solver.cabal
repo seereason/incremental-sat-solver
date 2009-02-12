@@ -23,7 +23,7 @@ Extra-Source-Files: README, Benchmark.hs, Funsat.hs
 
 Library
   Build-Depends:    base, containers, mtl
-  Exposed-Modules:  Data.Boolean.Proposition, Data.Boolean.SatSolver, Data.Boolean.DIMACS, Data.Boolean.SimpleSAT, Data.Boolean.DPLL
+  Exposed-Modules:  Data.Boolean.Proposition, Data.Boolean.SatSolver, Data.Boolean.Dimacs, Data.Boolean.SimpleSAT, Data.Boolean.DPLL
 
   Other-Modules:    
   Ghc-Options:      -Wall -funbox-strict-fields -O2
