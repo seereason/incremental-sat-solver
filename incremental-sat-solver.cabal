@@ -19,14 +19,15 @@ Homepage:      http://github.com/sebfisch/incremental-sat-solver
 Build-Type:    Simple
 Stability:     experimental
 
-Extra-Source-Files: README
+Extra-Source-Files: README, Benchmark.hs, Funsat.hs
 
 Library
   Build-Depends:    base, containers, mtl
-  Exposed-Modules:  Data.Boolean.SatSolver
-  Other-Modules:    Data.Boolean
-  Ghc-Options:      -Wall
+  Exposed-Modules:  Data.Boolean.Proposition, Data.Boolean.DPLL, Data.Boolean.DIMACS, Data.Boolean.SimpleSAT
+  Other-Modules:    
+  Ghc-Options:      -Wall -funbox-strict-fields -O2
 
 Source-Repository head
   type:     git
   location: git://github.com/sebfisch/incremental-sat-solver.git
+
