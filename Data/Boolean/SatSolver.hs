@@ -169,8 +169,10 @@ solve = go
 -- and only if that fails.
 -- 
 isSolvable :: Solvable a => SatSolver a -> Bool
-isSolvable = not . null . solve
-
+isSolvable = not . null' . solve
+    where
+      null' :: [a] -> Bool
+      null' = null
 
 
 {-
